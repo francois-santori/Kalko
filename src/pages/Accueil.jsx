@@ -1,52 +1,53 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateAccountModal from "../components/CreateAccountModal";
-import { kalkoApi } from "../api/kalkoApi";
+import { supabase } from "../api/supabaseClient";
 
 export default function Accueil() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const navigate = useNavigate();
 
-  // Connexion avec le formulaire de gauche
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!loginUsername.trim() || !loginPassword) return;
+    setIsLoggingIn(true);
 
     try {
-      setIsLoggingIn(true);
-      await kalkoApi.login({
-        username: loginUsername,
+      // Tentative de connexion via Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
         password: loginPassword,
       });
+
+      if (error) {
+        // Erreurs classiques renvoyées par Supabase
+        if (error.message.includes("Invalid login credentials")) {
+          alert("Identifiants incorrects.");
+        } else if (error.message.includes("Email not confirmed")) {
+          alert("Ton email n’est pas confirmé.");
+        } else {
+          alert(error.message);
+        }
+        return;
+      }
+
+      console.log("Connexion réussie :", data);
+
+      // Redirection vers les jeux
       navigate("/jeux");
+
     } catch (err) {
       console.error(err);
-      alert(
-        err.message ||
-          "Connexion impossible. Vérifie ton pseudo et ton mot de passe."
-      );
+      alert("Erreur lors de la connexion.");
     } finally {
       setIsLoggingIn(false);
     }
   };
 
-  // Création du compte via le modal
-  const handleCreateAccount = async (data) => {
-    try {
-      const newUser = await kalkoApi.registerUser(data);
-      console.log("Nouveau compte KALKO :", newUser);
-      setIsCreateOpen(false);
-      navigate("/jeux");
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Erreur lors de la création du compte.");
-    }
-  };
 
   return (
     <div
@@ -92,10 +93,10 @@ export default function Accueil() {
 
             <form className="flex flex-col gap-3" onSubmit={handleLogin}>
               <input
-                type="text"
-                placeholder="Nom d'utilisateur"
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
+                type="email"
+                placeholder="Email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
                 className="px-3 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-white placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-400/80"
               />
               <input
@@ -179,7 +180,7 @@ export default function Accueil() {
       <CreateAccountModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        onSubmit={handleCreateAccount}
+        // onSubmit n'est plus utilisé, Supabase gère désormais l'inscription à l'intérieur du modal
       />
     </div>
   );

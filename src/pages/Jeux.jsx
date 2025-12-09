@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { kalkoApi } from "../api/kalkoApi";
+import { supabase } from "../api/supabaseClient";
 import TablesModesModal from "../components/jeux/tables/TablesModesModal";
 
 export default function Jeux() {
@@ -11,22 +11,33 @@ export default function Jeux() {
   // Modal de choix de mode pour les tables
   const [isModesModalOpen, setIsModesModalOpen] = useState(false);
 
-  // Protection de la page : si pas connecté → retour à l'accueil
+  // Protection de la page : si pas connecté → retour à l'accueil (version Supabase)
   useEffect(() => {
     let isMounted = true;
 
     const checkAuth = async () => {
       try {
-        const current = await kalkoApi.getCurrentUser();
+        const { data, error } = await supabase.auth.getUser();
         if (!isMounted) return;
 
-        if (!current) {
-          navigate("/"); // pas d'utilisateur connecté → retour accueil
-        } else {
-          setUser(current);
+        // Pas de session valide → retour à l'accueil
+        if (error || !data?.user) {
+          navigate("/");
+          return;
         }
+
+        const meta = data.user.user_metadata || {};
+
+        // On reconstruit un "user" pour l'UI, à partir des métadonnées Supabase
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+          firstname: meta.first_name || "",
+          lastname: meta.last_name || "",
+          username: meta.username || "",
+        });
       } catch (e) {
-        console.error(e);
+        console.error("Erreur auth Supabase :", e);
         navigate("/");
       } finally {
         if (isMounted) {
@@ -44,9 +55,9 @@ export default function Jeux() {
 
   const handleLogout = async () => {
     try {
-      await kalkoApi.logout();
+      await supabase.auth.signOut();
     } catch (e) {
-      console.error(e);
+      console.error("Erreur lors de la déconnexion Supabase :", e);
     } finally {
       navigate("/");
     }

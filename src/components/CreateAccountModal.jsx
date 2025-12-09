@@ -1,82 +1,81 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, Eye, EyeOff } from "lucide-react";
+import { supabase } from "../api/supabaseClient";
 
-export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
-  const [firstname, setFirstname] = useState("");
-  const [lastname, setLastname] = useState("");
-  const [username, setUsername] = useState("");
-  const [phone, setPhone] = useState("");
+export default function CreateAccountModal({ isOpen, onClose, }) {
+  const [firstname, setFirstname] = useState(""); // first_name
+  const [lastname, setLastname] = useState(""); // last_name
+  const [username, setUsername] = useState(""); // pseudo
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const [touched, setTouched] = useState({
     firstname: false,
     lastname: false,
     username: false,
-    phone: false,
+    email: false,
     password: false,
+    passwordConfirm: false,
   });
 
-  const [checkingUsername, setCheckingUsername] = useState(false);
-  const [usernameTaken, setUsernameTaken] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    const v = username.trim();
-    if (v.length < 3) {
-      setCheckingUsername(false);
-      setUsernameTaken(false);
-      return;
-    }
-    setCheckingUsername(true);
-    const t = setTimeout(() => {
-      const fakeTaken = ["kalko", "admin", "test"];
-      setUsernameTaken(fakeTaken.includes(v.toLowerCase()));
-      setCheckingUsername(false);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [username]);
-
-  const getFirstnameError = () =>
-    !firstname.trim() ? "Ce champ est obligatoire." : "";
-
-  const getLastnameError = () =>
-    !lastname.trim() ? "Ce champ est obligatoire." : "";
-
-  const getUsernameError = () => {
-    const v = username.trim();
-    if (!v) return "Ce champ est obligatoire.";
-    if (v.length < 3) return "Minimum 3 caractères.";
-    if (usernameTaken) return "Ce pseudo est déjà pris.";
+  const getFirstnameError = () => {
+    // Option : rendre Nom obligatoire plus tard si besoin
     return "";
   };
 
-  const getPhoneError = () => {
-    const d = phone.replace(/\D/g, "");
-    if (!d) return "Ce champ est obligatoire.";
-    if (d.length !== 10) return "Doit contenir 10 chiffres.";
-    if (!/^0[67]\d{8}$/.test(d)) return "Doit commencer par 06 ou 07.";
+  const getLastnameError = () => {
+    // Option : rendre Prénom obligatoire plus tard si besoin
+    return "";
+  };
+
+  const getUsernameError = () => {
+    const v = username.trim();
+    if (!v) return "Le pseudo est obligatoire.";
+    if (v.length < 3) return "Minimum 3 caractères.";
+    return "";
+  };
+
+  const getEmailError = () => {
+    const v = email.trim();
+    if (!v) return "L’email est obligatoire.";
+    const simpleRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!simpleRegex.test(v)) return "Format d’email invalide.";
     return "";
   };
 
   const getPasswordError = () => {
-    if (!password) return "Ce champ est obligatoire.";
-    if (password.length < 4) return "Minimum 4 caractères.";
+    if (!password) return "Le mot de passe est obligatoire.";
+    if (password.length < 6) return "Minimum 6 caractères.";
+    return "";
+  };
+
+  const getPasswordConfirmError = () => {
+    if (!passwordConfirm) return "Merci de confirmer le mot de passe.";
+    if (passwordConfirm !== password)
+      return "Les mots de passe ne correspondent pas.";
     return "";
   };
 
   const firstnameError = getFirstnameError();
   const lastnameError = getLastnameError();
   const usernameError = getUsernameError();
-  const phoneError = getPhoneError();
+  const emailError = getEmailError();
   const passwordError = getPasswordError();
+  const passwordConfirmError = getPasswordConfirmError();
 
   const hasErrors =
-    firstnameError ||
-    lastnameError ||
     usernameError ||
-    phoneError ||
-    passwordError;
+    emailError ||
+    passwordError ||
+    passwordConfirmError ||
+    firstnameError ||
+    lastnameError;
 
   const baseInput = `
     w-full rounded-xl bg-white/10 border
@@ -106,28 +105,89 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
     return base + " border-white/20 focus:border-white/60 focus:ring-white/40";
   };
 
-  const handleSubmit = (e) => {
+  const handleBlur = (field) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError("");
+
+    // On marque tous les champs comme "touchés" pour afficher les erreurs
     setTouched({
       firstname: true,
       lastname: true,
       username: true,
-      phone: true,
+      email: true,
       password: true,
+      passwordConfirm: true,
     });
-    if (hasErrors || checkingUsername) return;
 
-    onSubmit({
-      firstname: firstname.trim(),
-      lastname: lastname.trim(),
+    if (hasErrors) return;
+
+    const payload = {
+      first_name: firstname.trim(),
+      last_name: lastname.trim(),
       username: username.trim(),
-      phone: phone.replace(/\D/g, ""),
+      email: email.trim(),
       password,
-    });
-  };
+    };
 
-  const handleBlur = (f) =>
-    setTouched((p) => ({ ...p, [f]: true }));
+    try {
+      setIsSubmitting(true);
+
+      // Appel Supabase pour créer l'utilisateur
+      const { data, error } = await supabase.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: {
+          data: {
+            first_name: payload.first_name || null,
+            last_name: payload.last_name || null,
+            username: payload.username,
+          },
+        },
+      });
+
+      if (error) {
+        setSubmitError(error.message || "Une erreur est survenue.");
+        return;
+      }
+
+      console.log("Inscription Supabase réussie :", data);
+
+      // TODO: plus tard, si on utilise une table profiles séparée,
+      // on pourra ajouter ici un appel supabase.from('profiles').insert(...)
+
+      // Désactivé : ancien système kalkoApi basé sur le numéro de mobile.
+      // Supabase gère désormais l'inscription, donc on ignore onSubmit pour le moment.
+      // if (onSubmit) {
+      //   onSubmit(payload, data);
+      // }
+
+      // On peut éventuellement reset le formulaire ici si tu le souhaites
+      setFirstname("");
+      setLastname("");
+      setUsername("");
+      setEmail("");
+      setPassword("");
+      setPasswordConfirm("");
+      setTouched({
+        firstname: false,
+        lastname: false,
+        username: false,
+        email: false,
+        password: false,
+        passwordConfirm: false,
+      });
+
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setSubmitError("Erreur inattendue lors de la création du compte.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -190,7 +250,7 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
                   Créer un compte KALKO
                 </h2>
                 <p className="mt-1 text-xs sm:text-sm text-white/80">
-                  Renseigne tes informations et rejoins l’aventure.
+                  Renseigne tes infos et rejoins l’aventure.
                 </p>
               </div>
 
@@ -215,6 +275,7 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
                 space-y-5 overflow-y-auto
               "
             >
+              {/* Nom / Prénom */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs sm:text-sm text-white/90">
@@ -263,6 +324,7 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
                 </div>
               </div>
 
+              {/* Pseudo */}
               <div className="space-y-1.5">
                 <label className="text-xs sm:text-sm text-white/90">
                   Pseudo
@@ -277,99 +339,115 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
                     touched.username && usernameError,
                     username
                   )}
+                  placeholder="Choisis un pseudo"
                 />
-                <div className="flex items-center gap-2">
-                  {checkingUsername && (
-                    <p className="text-[0.7rem] sm:text-xs text-white/70">
-                      Vérification…
-                    </p>
-                  )}
-                  {touched.username && usernameError && !checkingUsername && (
-                    <p className="text-[0.7rem] sm:text-xs text-red-300">
-                      {usernameError}
-                    </p>
-                  )}
-                  {touched.username &&
-                    !usernameError &&
-                    username.trim().length >= 3 &&
-                    !checkingUsername && (
-                      <p className="text-[0.7rem] sm:text-xs text-emerald-300">
-                        Disponible ✔
-                      </p>
-                    )}
-                </div>
+                {touched.username && usernameError && (
+                  <p className="text-[0.7rem] sm:text-xs text-red-300">
+                    {usernameError}
+                  </p>
+                )}
               </div>
 
+              {/* Email */}
               <div className="space-y-1.5">
                 <label className="text-xs sm:text-sm text-white/90">
-                  Numéro de mobile
+                  Email
                 </label>
                 <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  onBlur={() => handleBlur("phone")}
-                  inputMode="tel"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => handleBlur("email")}
                   className={inputClass(
                     baseInput,
-                    touched.phone && phoneError,
-                    phone
+                    touched.email && emailError,
+                    email
                   )}
-                  placeholder="06 12 34 56 78"
+                  placeholder="ton.email@exemple.com"
                 />
-                {touched.phone && phoneError ? (
+                {touched.email && emailError && (
                   <p className="text-[0.7rem] sm:text-xs text-red-300">
-                    {phoneError}
-                  </p>
-                ) : (
-                  <p className="text-[0.7rem] sm:text-xs text-white/65">
-                    Numéro français, 10 chiffres, 06 ou 07.
+                    {emailError}
                   </p>
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs sm:text-sm text-white/90">
-                  Mot de passe
-                </label>
+              {/* Mot de passe + confirmation */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs sm:text-sm text-white/90">
+                    Mot de passe
+                  </label>
 
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onBlur={() => handleBlur("password")}
-                    className={inputClass(
-                      basePasswordInput,
-                      touched.password && passwordError,
-                      password
-                    )}
-                    placeholder="Ton code secret"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => handleBlur("password")}
+                      className={inputClass(
+                        basePasswordInput,
+                        touched.password && passwordError,
+                        password
+                      )}
+                      placeholder="Ton code secret"
+                    />
 
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((p) => !p)}
-                    className="
-                      absolute inset-y-0 right-2 flex items-center
-                      text-white/80 hover:text-white transition
-                    "
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="
+                        absolute inset-y-0 right-2 flex items-center
+                        text-white/80 hover:text-white transition
+                      "
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {touched.password && passwordError && (
+                    <p className="text-[0.7rem] sm:text-xs text-red-300">
+                      {passwordError}
+                    </p>
+                  )}
                 </div>
 
-                {touched.password && passwordError && (
-                  <p className="text-[0.7rem] sm:text-xs text-red-300">
-                    {passwordError}
-                  </p>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs sm:text-sm text-white/90">
+                    Confirme le mot de passe
+                  </label>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    onBlur={() => handleBlur("passwordConfirm")}
+                    className={inputClass(
+                      basePasswordInput,
+                      touched.passwordConfirm && passwordConfirmError,
+                      passwordConfirm
+                    )}
+                    placeholder="Répète ton mot de passe"
+                  />
+                  {touched.passwordConfirm && passwordConfirmError && (
+                    <p className="text-[0.7rem] sm:text-xs text-red-300">
+                      {passwordConfirmError}
+                    </p>
+                  )}
+                </div>
               </div>
 
+              {/* Erreur globale Supabase */}
+              {submitError && (
+                <p className="text-xs sm:text-sm text-red-300 mt-1">
+                  {submitError}
+                </p>
+              )}
+
+              {/* Actions */}
               <div className="pt-4 mt-2 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:justify-between">
                 <button
                   type="button"
@@ -387,7 +465,7 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
 
                 <button
                   type="submit"
-                  disabled={checkingUsername}
+                  disabled={hasErrors || isSubmitting}
                   className={`
                     w-full sm:w-auto rounded-xl
                     bg-white/90 hover:bg-white
@@ -395,13 +473,13 @@ export default function CreateAccountModal({ isOpen, onClose, onSubmit }) {
                     px-4 sm:px-6 py-2.5 shadow-[0_14px_45px_rgba(0,0,0,0.55)]
                     transition
                     ${
-                      checkingUsername
+                      hasErrors || isSubmitting
                         ? "opacity-60 cursor-not-allowed"
                         : ""
                     }
                   `}
                 >
-                  Créer mon compte
+                  {isSubmitting ? "Création..." : "Créer mon compte"}
                 </button>
               </div>
             </form>
