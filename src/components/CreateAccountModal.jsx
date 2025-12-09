@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Eye, EyeOff } from "lucide-react";
 import { supabase } from "../api/supabaseClient";
 
-export default function CreateAccountModal({ isOpen, onClose, }) {
+export default function CreateAccountModal({ isOpen, onClose }) {
   const [firstname, setFirstname] = useState(""); // first_name
   const [lastname, setLastname] = useState(""); // last_name
   const [username, setUsername] = useState(""); // pseudo
@@ -164,7 +164,7 @@ export default function CreateAccountModal({ isOpen, onClose, }) {
       //   onSubmit(payload, data);
       // }
 
-      // On peut éventuellement reset le formulaire ici si tu le souhaites
+      // Reset du formulaire
       setFirstname("");
       setLastname("");
       setUsername("");
@@ -276,7 +276,7 @@ export default function CreateAccountModal({ isOpen, onClose, }) {
               "
             >
               {/* Nom / Prénom */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs sm:text-sm text-white/90">
                     Nom
@@ -373,7 +373,7 @@ export default function CreateAccountModal({ isOpen, onClose, }) {
               </div>
 
               {/* Mot de passe + confirmation */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs sm:text-sm text-white/90">
                     Mot de passe
